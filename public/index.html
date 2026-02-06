@@ -1,0 +1,319 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <meta name="theme-color" content="#1a1a2e">
+  <meta name="description" content="Survivors Bullet Hell - A mobile-first bullet hell shooter">
+  <title>Survivors Bullet Hell</title>
+  <link rel="manifest" href="manifest.json">
+  <link rel="icon" href="icons/icon-192.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="icons/icon-192.svg">
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html, body {
+      width: 100%; height: 100%;
+      overflow: hidden;
+      background: #1a1a2e;
+      font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+      touch-action: none;
+      user-select: none;
+      -webkit-user-select: none;
+    }
+    #game-container {
+      position: relative;
+      width: 100%; height: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    #game-canvas {
+      display: block;
+      image-rendering: pixelated;
+    }
+    /* HUD */
+    #hud {
+      position: absolute; top: 0; left: 0; right: 0;
+      pointer-events: none;
+      z-index: 10;
+    }
+    #hud-top {
+      display: flex; justify-content: space-between;
+      padding: 8px 12px;
+    }
+    .hud-left, .hud-right {
+      color: #fff; font-size: 14px;
+      text-shadow: 1px 1px 2px rgba(0,0,0,0.8);
+    }
+    #health-bar-container {
+      width: 120px; height: 10px;
+      background: #333; border-radius: 5px;
+      overflow: hidden; margin-top: 4px;
+    }
+    #health-bar {
+      height: 100%; background: #e74c3c;
+      transition: width 0.2s;
+    }
+    .hud-right { text-align: right; }
+
+    /* Controls */
+    #controls {
+      position: absolute; bottom: 0; left: 0; right: 0;
+      pointer-events: none;
+      z-index: 10;
+      display: flex; justify-content: space-between;
+      padding: 20px;
+    }
+    #joystick-area {
+      width: 140px; height: 140px;
+      pointer-events: auto;
+      position: relative;
+    }
+    #joystick-base {
+      width: 120px; height: 120px;
+      border-radius: 50%;
+      background: rgba(255,255,255,0.15);
+      border: 2px solid rgba(255,255,255,0.3);
+      position: absolute;
+      bottom: 0; left: 0;
+    }
+    #joystick-stick {
+      width: 50px; height: 50px;
+      border-radius: 50%;
+      background: rgba(255,255,255,0.4);
+      position: absolute;
+      bottom: 35px; left: 35px;
+      transition: none;
+    }
+    #buttons-area {
+      display: flex; gap: 12px;
+      align-items: flex-end;
+      pointer-events: auto;
+    }
+    .action-btn {
+      width: 70px; height: 70px;
+      border-radius: 50%;
+      border: 2px solid rgba(255,255,255,0.5);
+      background: rgba(255,255,255,0.15);
+      color: #fff; font-size: 11px; font-weight: bold;
+      display: flex; align-items: center; justify-content: center;
+      cursor: pointer;
+      text-transform: uppercase;
+    }
+    .action-btn:active { background: rgba(255,255,255,0.35); }
+    #shoot-btn { background: rgba(231,76,60,0.4); border-color: rgba(231,76,60,0.7); }
+    #special-btn { background: rgba(52,152,219,0.4); border-color: rgba(52,152,219,0.7); }
+
+    /* Overlays */
+    .overlay {
+      position: absolute; inset: 0;
+      background: rgba(0,0,0,0.85);
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      z-index: 100; color: #fff;
+      overflow-y: auto;
+    }
+    .overlay.hidden { display: none; }
+    .overlay h1 { font-size: 28px; margin-bottom: 16px; color: #e74c3c; }
+    .overlay h2 { font-size: 22px; margin-bottom: 12px; }
+    .menu-btn {
+      padding: 12px 32px; margin: 6px;
+      font-size: 16px; font-weight: bold;
+      border: 2px solid #e74c3c;
+      background: rgba(231,76,60,0.2);
+      color: #fff; border-radius: 8px;
+      cursor: pointer;
+      min-width: 200px;
+    }
+    .menu-btn:hover { background: rgba(231,76,60,0.4); }
+    .menu-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+    /* Shop */
+    #shop-overlay .shop-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+      gap: 10px; padding: 10px;
+      max-width: 600px; width: 100%;
+      max-height: 60vh; overflow-y: auto;
+    }
+    .shop-item {
+      background: rgba(255,255,255,0.08);
+      border: 1px solid rgba(255,255,255,0.15);
+      border-radius: 8px; padding: 10px;
+      text-align: center; font-size: 12px;
+    }
+    .shop-item .item-name { font-weight: bold; margin-bottom: 4px; }
+    .shop-item .item-desc { color: #aaa; margin-bottom: 6px; font-size: 11px; }
+    .shop-item .item-cost { color: #f1c40f; font-weight: bold; }
+    .shop-item button {
+      margin-top: 6px; padding: 4px 12px;
+      background: #27ae60; border: none; color: #fff;
+      border-radius: 4px; cursor: pointer; font-size: 12px;
+    }
+    .shop-item button:disabled { background: #555; cursor: not-allowed; }
+
+    /* Character select */
+    #char-select-overlay .char-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+      gap: 10px; padding: 10px;
+      max-width: 600px; width: 100%;
+      max-height: 60vh; overflow-y: auto;
+    }
+    .char-card {
+      background: rgba(255,255,255,0.08);
+      border: 2px solid rgba(255,255,255,0.15);
+      border-radius: 8px; padding: 10px;
+      text-align: center; font-size: 12px;
+      cursor: pointer;
+    }
+    .char-card.selected { border-color: #e74c3c; }
+    .char-card.locked { opacity: 0.5; cursor: not-allowed; }
+    .char-card .char-name { font-weight: bold; margin-bottom: 4px; }
+    .char-card .char-desc { color: #aaa; font-size: 11px; }
+
+    /* Toast notifications */
+    #toast-container {
+      position: absolute; top: 50px; left: 50%; transform: translateX(-50%);
+      z-index: 200; display: flex; flex-direction: column;
+      align-items: center; gap: 6px;
+      pointer-events: none;
+    }
+    .toast {
+      background: rgba(0,0,0,0.9);
+      border: 1px solid rgba(255,255,255,0.3);
+      border-radius: 8px; padding: 8px 16px;
+      color: #fff; font-size: 13px;
+      pointer-events: auto;
+      animation: toastIn 0.3s ease;
+    }
+    .toast.update-toast {
+      background: rgba(39,174,96,0.95);
+      cursor: pointer;
+    }
+    @keyframes toastIn {
+      from { opacity: 0; transform: translateY(-10px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    /* Level select */
+    .level-list { display: flex; flex-direction: column; gap: 8px; margin: 10px 0; }
+
+    /* Game over */
+    #gameover-overlay .stats { margin: 12px 0; font-size: 14px; line-height: 1.8; }
+
+    /* Pause */
+    #pause-overlay { z-index: 150; }
+
+    @media (min-width: 768px) {
+      #joystick-area { display: none; }
+      #buttons-area { display: none; }
+    }
+  </style>
+</head>
+<body>
+  <div id="game-container">
+    <canvas id="game-canvas"></canvas>
+
+    <!-- HUD -->
+    <div id="hud">
+      <div id="hud-top">
+        <div class="hud-left">
+          <div id="player-name">Rookie</div>
+          <div id="health-bar-container">
+            <div id="health-bar" style="width:100%"></div>
+          </div>
+          <div id="health-text">100/100</div>
+        </div>
+        <div class="hud-right">
+          <div id="coin-display">Coins: 0</div>
+          <div id="score-display">Score: 0</div>
+          <div id="wave-display">Wave: 1</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Mobile controls -->
+    <div id="controls">
+      <div id="joystick-area">
+        <div id="joystick-base">
+          <div id="joystick-stick"></div>
+        </div>
+      </div>
+      <div id="buttons-area">
+        <div id="special-btn" class="action-btn">SPEC</div>
+        <div id="shoot-btn" class="action-btn">FIRE</div>
+      </div>
+    </div>
+
+    <!-- Toast container -->
+    <div id="toast-container"></div>
+
+    <!-- Main Menu Overlay -->
+    <div id="menu-overlay" class="overlay">
+      <h1>SURVIVORS</h1>
+      <h2>Bullet Hell</h2>
+      <button class="menu-btn" id="btn-play">Play</button>
+      <button class="menu-btn" id="btn-select-level">Select Level</button>
+      <button class="menu-btn" id="btn-characters">Characters</button>
+      <button class="menu-btn" id="btn-shop">Shop</button>
+      <div style="margin-top: 16px; font-size: 12px; color: #888;">
+        <span id="menu-plays">Plays: 0</span> |
+        <span id="menu-highscore">Best: 0</span> |
+        <span id="menu-coins">Coins: 0</span>
+      </div>
+      <div style="margin-top: 8px; font-size: 11px; color: #666;">
+        Desktop: WASD/Arrows to move, Space/Click to shoot, E for special
+      </div>
+    </div>
+
+    <!-- Level Select Overlay -->
+    <div id="level-select-overlay" class="overlay hidden">
+      <h2>Select Level</h2>
+      <div class="level-list" id="level-list"></div>
+      <button class="menu-btn" id="btn-level-back">Back</button>
+    </div>
+
+    <!-- Character Select Overlay -->
+    <div id="char-select-overlay" class="overlay hidden">
+      <h2>Select Character</h2>
+      <div class="char-grid" id="char-grid"></div>
+      <button class="menu-btn" id="btn-char-back">Back</button>
+    </div>
+
+    <!-- Shop Overlay -->
+    <div id="shop-overlay" class="overlay hidden">
+      <h2>Shop</h2>
+      <div id="shop-coins" style="color:#f1c40f;margin-bottom:10px;">Coins: 0</div>
+      <div class="shop-grid" id="shop-grid"></div>
+      <button class="menu-btn" id="btn-shop-back">Back</button>
+    </div>
+
+    <!-- Pause Overlay -->
+    <div id="pause-overlay" class="overlay hidden">
+      <h2>Paused</h2>
+      <button class="menu-btn" id="btn-resume">Resume</button>
+      <button class="menu-btn" id="btn-quit">Quit to Menu</button>
+    </div>
+
+    <!-- Game Over Overlay -->
+    <div id="gameover-overlay" class="overlay hidden">
+      <h2>Game Over</h2>
+      <div class="stats" id="gameover-stats"></div>
+      <button class="menu-btn" id="btn-retry">Retry</button>
+      <button class="menu-btn" id="btn-go-menu">Main Menu</button>
+    </div>
+
+    <!-- Level Complete Overlay -->
+    <div id="levelcomplete-overlay" class="overlay hidden">
+      <h2>Level Complete!</h2>
+      <div class="stats" id="levelcomplete-stats"></div>
+      <button class="menu-btn" id="btn-next-level">Next Level</button>
+      <button class="menu-btn" id="btn-lc-shop">Shop</button>
+      <button class="menu-btn" id="btn-lc-menu">Main Menu</button>
+    </div>
+  </div>
+
+  <script src="dist/bundle.js"></script>
+</body>
+</html>
